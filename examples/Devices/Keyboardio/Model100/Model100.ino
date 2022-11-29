@@ -94,6 +94,9 @@
 // Support for SpaceCadet keys
 #include "Kaleidoscope-SpaceCadet.h"
 
+// Colour keyes based on active layer
+#include "Kaleidoscope-LEDEffect-FunctionalColor.h"
+
 // Support for editable layer names
 #include "Kaleidoscope-LayerNames.h"
 
@@ -113,10 +116,13 @@
   * a macro key is pressed.
   */
 
-enum {
-  MACRO_VERSION_INFO,
-  MACRO_ANY,
-};
+enum { MACRO_VERSION_INFO,
+       MACRO_ANY,
+       L_AE,
+       L_OE,
+       L_AA,
+     };
+
 
 
 /** The Model 100's key layouts are defined as 'keymaps'. By default, there are three
@@ -167,11 +173,7 @@ enum {
   *
   */
 
-enum {
-  PRIMARY,
-  NUMPAD,
-  FUNCTION,
-};  // layers
+enum { PRIMARY, NUMPAD, GAMING, FNCTGAME, GAMINGTYPE, FUNCTION }; // layers
 
 
 /**
@@ -289,18 +291,64 @@ KEYMAPS(
    ___,                    ___, Key_0, Key_Period, Key_KeypadMultiply, Key_KeypadDivide,   Key_Enter,
    ___, ___, ___, ___,
    ___),
+  
+  [GAMING] = KEYMAP_STACKED
+  (Key_Escape,      Key_1, Key_2, Key_3, Key_4, Key_5, Key_T,
+   Key_Tab,         Key_6, Key_Q, Key_W, Key_E, Key_R, Key_G,
+   Key_LeftShift,   Key_7, Key_A, Key_S, Key_D, Key_F, 
+   Key_LeftControl, Key_8, Key_Z, Key_X, Key_C, Key_V, Key_B, 
+   Key_9, Key_Spacebar, Key_0, Key_Equals,
+   ShiftToLayer(FNCTGAME),
+
+   LockLayer(GAMING),   ___, ___, ___, ___, ___, ___,
+   ___,                 ___, ___, ___, ___, ___, ___,
+   ___,                 ___, ___, ___, ___, ___,
+   ___,                 ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___,
+   ShiftToLayer(GAMINGTYPE)),
+
+  [FNCTGAME] = KEYMAP_STACKED
+  (___, Key_F1, Key_F2,  Key_F3, Key_F4,  Key_F5,  ___,  
+   ___, Key_F6, ___, ___, ___, ___, ___, 
+   ___, Key_F7, ___, ___, ___, ___,
+   ___, Key_F8, Key_PrintScreen, ___, ___, ___, ___,
+   Key_F9, Key_F10, Key_F11, Key_F12,
+   ___,
+
+   ___, ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___,
+   ___),
+
+
+  [GAMINGTYPE] = KEYMAP_STACKED
+  (___,          Key_1, Key_2, Key_3, Key_4, Key_5, Key_LEDEffectNext,
+   Key_Backtick, Key_Q, Key_W, Key_E, Key_R, Key_T, Key_Tab,
+   Key_PageUp,   Key_A, Key_S, Key_D, Key_F, Key_G,
+   Key_PageDown, Key_Z, Key_X, Key_C, Key_V, Key_B, Key_Escape,
+   Key_LeftControl, Key_Backspace, Key_LeftGui, Key_LeftShift,
+   ShiftToLayer(FUNCTION),
+   
+   ___, ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___, ___, ___, ___,
+   ___, ___, ___, ___,
+   ___),
 
   [FUNCTION] =  KEYMAP_STACKED
   (___,      Key_F1,           Key_F2,      Key_F3,     Key_F4,        Key_F5,           Key_CapsLock,
    Key_Tab,  ___,              Key_mouseUp, ___,        Key_mouseBtnR, Key_mouseWarpEnd, Key_mouseWarpNE,
    Key_Home, Key_mouseL,       Key_mouseDn, Key_mouseR, Key_mouseBtnL, Key_mouseWarpNW,
    Key_End,  Key_PrintScreen,  Key_Insert,  ___,        Key_mouseBtnM, Key_mouseWarpSW,  Key_mouseWarpSE,
-   ___, Key_Delete, ___, ___,
+   ___, Key_Delete, LockLayer(GAMING), ___,
    ___,
 
    Consumer_ScanPreviousTrack, Key_F6,                 Key_F7,                   Key_F8,                   Key_F9,          Key_F10,          Key_F11,
-   Consumer_PlaySlashPause,    Consumer_ScanNextTrack, Key_LeftCurlyBracket,     Key_RightCurlyBracket,    Key_LeftBracket, Key_RightBracket, Key_F12,
-                               Key_LeftArrow,          Key_DownArrow,            Key_UpArrow,              Key_RightArrow,  ___,              ___,
+   Consumer_PlaySlashPause,    Consumer_ScanNextTrack, Key_LeftCurlyBracket,     Key_RightCurlyBracket,    Key_LeftBracket, Key_RightBracket, M(L_AA),
+                               Key_LeftArrow,          Key_DownArrow,            Key_UpArrow,              Key_RightArrow,  M(L_OE),          M(L_AE),
    Key_PcApplication,          Consumer_Mute,          Consumer_VolumeDecrement, Consumer_VolumeIncrement, ___,             Key_Backslash,    Key_Pipe,
    ___, ___, Key_Enter, ___,
    ___)
@@ -336,6 +384,65 @@ static void anyKeyMacro(KeyEvent &event) {
   }
 }
 
+namespace kaleidoscope {
+namespace plugin {
+
+// When activated, this plugin will suppress any `Shift` key (including modifier
+// combos with `Shift`) before it's added to the HID report.
+class ShiftBlocker : public Plugin {
+
+ public:
+  EventHandlerResult onAddToReport(Key key) {
+    if (active_ && key.isKeyboardShift())
+      return EventHandlerResult::ABORT;
+    return EventHandlerResult::OK;
+  }
+
+  void enable() {
+    active_ = true;
+  }
+  void disable() {
+    active_ = false;
+  }
+
+ private:
+  bool active_{false};
+
+};
+
+} // namespace plugin
+} // namespace kaleidoscope
+
+kaleidoscope::plugin::ShiftBlocker ShiftBlocker;
+
+// Custrom Macro for Norwegian keys æøå
+static void compose2(Key key1, bool shift1, Key key2, bool shift2, uint8_t keyState) {
+  if (!keyToggledOn(keyState)) {
+    return;
+  }
+
+  bool shifted = Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_LeftShift)
+  || Kaleidoscope.hid().keyboard().wasModifierKeyActive(Key_RightShift);
+
+  // Release the pressed shift key for the duration of the macro
+  if (shifted) {
+    ShiftBlocker.enable();
+  }
+
+  Macros.press(Key_RightAlt);
+  if (shifted && shift1) ShiftBlocker.disable();
+  Macros.tap(key1);
+  if (shifted && shift1) ShiftBlocker.enable();
+  if (shifted && shift2) ShiftBlocker.disable();
+  Macros.tap(key2);
+  if (shifted && shift2) ShiftBlocker.enable();
+  Macros.release(Key_RightAlt);
+
+  // To preserve state repress the released shift key
+  if (shifted) {
+    ShiftBlocker.disable();
+  }
+}
 
 /** macroAction dispatches keymap events that are tied to a macro
     to that macro. It takes two uint8_t parameters.
@@ -349,20 +456,73 @@ static void anyKeyMacro(KeyEvent &event) {
 
  */
 
+//const macro_t *macroAction(uint8_t macroIndex, uint8_t keyState) {
 const macro_t *macroAction(uint8_t macro_id, KeyEvent &event) {
   switch (macro_id) {
+    case L_AE:
+      compose2(Key_A, true, Key_E, true, event.state);
+      break;
+   
+    case L_OE:
+      compose2(Key_Slash, false, Key_O, true, event.state);
+      break;
+    
+    case L_AA:
+      compose2(Key_O, false, Key_A, true, event.state);
+      break;
 
-  case MACRO_VERSION_INFO:
-    versionInfoMacro(event.state);
-    break;
+    case MACRO_VERSION_INFO:
+      versionInfoMacro(event.state);
+      break;
 
-  case MACRO_ANY:
-    anyKeyMacro(event);
-    break;
+    case MACRO_ANY:
+      anyKeyMacro(event);
+      break;
   }
   return MACRO_NONE;
 }
 
+/******************** ADD FUNCTIONALCOLOR CONFIGURATION HERE ********************/
+//Add this line if you don't want to have to prefix colors and functions with kaleidoscope::LEDFunctionalColor
+using namespace kaleidoscope::plugin::LEDFunctionalColor;
+
+FunctionalColor funColorMyGamingColors;
+
+struct myGamingColors: public colorMap {
+  FC_MAP_COLOR(baseColor, purple)
+  // Also color the prog key
+  FC_MAP_COLOR(defaultColor, purple)
+  FC_MAP_COLOR(number, pink)
+  FC_MAP_COLOR(alpha, turquoise)
+
+  // F1 - F12 and F13 - F24
+  FC_MAP_COLOR(function, blue)
+    
+  FC_MAP_COLOR(space, green)
+  FC_MAP_COLOR(backspace, red)
+  FC_MAP_COLOR(escape, red)
+  FC_MAP_COLOR(del, red)
+  FC_MAP_COLOR(tab, blue)
+  FC_MAP_COLOR(enter, blue)
+  FC_MAP_COLOR(fn, blue)
+  FC_MAP_COLOR(media, yellow)
+  FC_MAP_COLOR(navigation, magenta)
+  FC_MAP_COLOR(punctuation, magenta)
+
+  FC_MAP_COLOR(modifier, orange)
+  //FC_MAP_COLOR(shift, orange)
+  //FC_MAP_COLOR(control, orange)
+  //FC_MAP_COLOR(alt, orange)
+  //FC_MAP_COLOR(gui, orange)
+  
+  // Color wasd in a different color
+  //FC_GROUPKEY(KEY_A)
+  //FC_GROUPKEY(KEY_S)
+  //FC_GROUPKEY(KEY_D)
+  //FC_KEYCOLOR(KEY_F, red)
+};
+
+/******************** END FUNCTIONALCOLOR CONFIGURATION HERE ********************/
 
 // These 'solid' color effect definitions define a rainbow of
 // LED color modes calibrated to draw 500mA or less on the
@@ -498,18 +658,21 @@ KALEIDOSCOPE_INIT_PLUGINS(
 
   // We start with the LED effect that turns off all the LEDs.
   LEDOff,
+  
+  // funColor stuff
+  funColorMyGamingColors,
 
   // The rainbow effect changes the color of all of the keyboard's keys at the same time
   // running through all the colors of the rainbow.
-  LEDRainbowEffect,
+  //LEDRainbowEffect,
 
   // The rainbow wave effect lights up your keyboard with all the colors of a rainbow
   // and slowly moves the rainbow across your keyboard
-  LEDRainbowWaveEffect,
+  //LEDRainbowWaveEffect,
 
   // The chase effect follows the adventure of a blue pixel which chases a red pixel across
   // your keyboard. Spoiler: the blue pixel never catches the red pixel
-  LEDChaseEffect,
+  //LEDChaseEffect,
 
   // These static effects turn your keyboard's LEDs a variety of colors
   solidRed,
@@ -525,7 +688,7 @@ KALEIDOSCOPE_INIT_PLUGINS(
 
   // The AlphaSquare effect prints each character you type, using your
   // keyboard's LEDs as a display
-  AlphaSquareEffect,
+  //AlphaSquareEffect,
 
   // The stalker effect lights up the keys you've pressed recently
   StalkerEffect,
@@ -601,7 +764,10 @@ KALEIDOSCOPE_INIT_PLUGINS(
 
   // Enables the GeminiPR Stenography protocol. Unused by default, but with the
   // plugin enabled, it becomes configurable - and then usable - via Chrysalis.
-  GeminiPR);
+  GeminiPR,
+
+  // My "own" plugins
+  ShiftBlocker);
 
 /** The 'setup' function is one of the two standard Arduino sketch functions.
  * It's called when your keyboard first powers up. This is where you set up
@@ -634,6 +800,14 @@ void setup() {
   // 'BlazingTrail'. For details on other options, see
   // https://github.com/keyboardio/Kaleidoscope/blob/master/docs/plugins/LED-Stalker.md
   StalkerEffect.variant = STALKER(BlazingTrail);
+
+  // We want to make sure that the firmware starts with LED effects off
+  // This avoids over-taxing devices that don't have a lot of power to share
+  // with USB devices
+  //LEDOff.activate();
+  
+  // Funcolor stuff
+  FC_SET_THEME(funColorMyGamingColors, myGamingColors)
 
   // To make the keymap editable without flashing new firmware, we store
   // additional layers in EEPROM. For now, we reserve space for eight layers. If
